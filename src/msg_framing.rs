@@ -152,7 +152,6 @@ impl WinningNonce {
 	}
 }
 
-#[derive(Debug)]
 pub struct TransactionData {
 	pub previous_header: BlockHeader,
 	pub template_timestamp: u64,
@@ -172,6 +171,13 @@ impl TransactionData {
 			res.put_u32_le(tx.len() as u32);
 			res.put_slice(tx);
 		}
+	}
+}
+
+impl fmt::Debug for TransactionData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{previous_header:{:?},  template_timestamp:{:?}, transactions:{:?}}}",
+		 self.previous_header, self.template_timestamp, self.transactions.len())
 	}
 }
 

@@ -504,6 +504,7 @@ fn main() {
 					let authenticator_state = authenticator_state.clone();
 
 					tokio::spawn(TimeoutStream::new(rx, Duration::from_secs(60*10)).for_each(move |msg| {
+						println!("RX-Proxy:{:?}", msg);
 						macro_rules! send_response {
 							($msg: expr) => {
 								match send_sink.start_send($msg) {

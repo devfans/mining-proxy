@@ -35,7 +35,9 @@ impl RPCClient {
 				param_str += ",";
 			}
 		}
-		self.client.request(request.body(hyper::Body::from("{\"method\":\"".to_string() + method + "\",\"params\":[" + &param_str + "],\"id\":" + &self.id.fetch_add(1, Ordering::AcqRel).to_string() + "}")).unwrap()).map_err(|_| {
+		let req_str = "{\"method\":\"".to_string() + method + "\",\"params\":[" + &param_str + "],\"id\":" + &self.id.fetch_add(1, Ordering::AcqRel).to_string() + "}";
+		println!("TX-RPC:{}", req_str);
+		self.client.request(request.body(hyper::Body::from(req_str)).unwrap()).map_err(|_| {
 			println!("Failed to connect to RPC server!");
 			()
 		}).and_then(|res| {
@@ -64,6 +66,7 @@ impl RPCClient {
 						return future::err(());
 					}
 					if let Some(res) = v_obj.get("result") {
+						println!("RX-RPC:{:?}", *res);
 						future::result(Ok((*res).clone()))
 					} else {
 						println!("Failed to parse RPC server response!");
