@@ -252,6 +252,8 @@ struct StratumClient {
 }
 impl StratumClient {
 	fn attempt_send(&self, item: String) -> bool {
+		println!("TX-Stratum:{}", item);
+
 		if self.needs_close.load(Ordering::Acquire) {
 			return false;
 		}
@@ -554,6 +556,8 @@ impl StratumServer {
 			if client.needs_close.load(Ordering::Acquire) {
 				return future::result(Err(io::Error::new(io::ErrorKind::InvalidData, BadMessageError)));
 			}
+
+			println!("RX-Stratum:{}", line);
 
 			let json = match serde_json::from_str::<serde_json::Value>(&line) {
 				Ok(v) => {

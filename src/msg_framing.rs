@@ -51,6 +51,7 @@ fn push_compact_size(u: usize, v: &mut bytes::BytesMut) {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct BlockTemplate {
 	pub template_timestamp: u64,
@@ -111,6 +112,7 @@ impl BlockTemplate {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct CoinbasePrefixPostfix {
 	pub timestamp: u64,
@@ -125,6 +127,7 @@ impl CoinbasePrefixPostfix {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct WinningNonce {
 	pub template_timestamp: u64,
@@ -149,6 +152,7 @@ impl WinningNonce {
 	}
 }
 
+#[derive(Debug)]
 pub struct TransactionData {
 	pub previous_header: BlockHeader,
 	pub template_timestamp: u64,
@@ -171,6 +175,7 @@ impl TransactionData {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct BlockTemplateHeader {
 	pub template_timestamp: u64,
@@ -198,6 +203,7 @@ impl BlockTemplateHeader {
 	}
 }
 
+#[derive(Debug)]
 pub enum WorkMessage {
 	ProtocolSupport {
 		max_version: u16,
@@ -294,6 +300,7 @@ impl codec::Encoder for WorkMsgFramer {
 	type Error = io::Error;
 
 	fn encode(&mut self, msg: WorkMessage, res: &mut bytes::BytesMut) -> Result<(), io::Error> {
+		println!("TX-Work:{:?}", msg);
 		match msg {
 			WorkMessage::ProtocolSupport { max_version, min_version, flags } => {
 				res.reserve(1 + 3 + 2*3);
@@ -790,6 +797,7 @@ impl codec::Decoder for WorkMsgFramer {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct PoolUserAuth {
 	pub suggested_target: [u8; 32],
@@ -798,6 +806,7 @@ pub struct PoolUserAuth {
 	pub user_auth: Vec<u8>,
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct PoolUserPayoutInfo {
 	pub user_id: Vec<u8>,
@@ -820,6 +829,7 @@ impl PoolUserPayoutInfo {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct PoolPayoutInfo {
 	pub timestamp: u64,
@@ -848,6 +858,7 @@ impl PoolPayoutInfo {
 	}
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct PoolDifficulty {
 	pub user_id: Vec<u8>,
@@ -856,6 +867,7 @@ pub struct PoolDifficulty {
 	pub weak_block_target: [u8; 32],
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct PoolShare {
 	pub header_version: u32,
@@ -873,6 +885,7 @@ pub struct PoolShare {
 	pub previous_header: Option<BlockHeader>,
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub enum WeakBlockAction {
 	/// Takes tx at index n from the original sketch
@@ -885,6 +898,7 @@ pub enum WeakBlockAction {
 	},
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct WeakBlock {
 	pub header_version: u32,
@@ -942,6 +956,7 @@ impl WeakBlock {
 	}
 }
 
+#[derive(Debug)]
 pub enum ShareRejectedReason {
 	StalePrevBlock,
 	BadHash,
@@ -951,6 +966,7 @@ pub enum ShareRejectedReason {
 	Other(u8),
 }
 
+#[derive(Debug)]
 pub enum PoolMessage {
 	ProtocolSupport {
 		max_version: u16,
@@ -1033,6 +1049,7 @@ impl codec::Encoder for PoolMsgFramer {
 	type Error = io::Error;
 
 	fn encode(&mut self, msg: PoolMessage, res: &mut bytes::BytesMut) -> Result<(), io::Error> {
+		println!("TX-Pool:{:?}", msg);
 		match msg {
 			PoolMessage::ProtocolSupport { max_version, min_version, flags } => {
 				res.reserve(1 + 3 + 2*3);

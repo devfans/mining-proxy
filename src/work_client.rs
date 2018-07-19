@@ -166,6 +166,7 @@ impl ConnectionHandler<WorkMessage> for Arc<JobProviderHandler> {
 	}
 
 	fn handle_message(&self, msg: WorkMessage) -> Result<(), io::Error> {
+		println!("RX-Work:{:?}", msg);
 		let mut us = self.state.lock().unwrap();
 		if us.stream.is_none() { return Ok(()); }
 

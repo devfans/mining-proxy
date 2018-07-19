@@ -309,6 +309,8 @@ impl ConnectionHandler<PoolMessage> for Arc<PoolHandler> {
 	}
 
 	fn handle_message(&self, msg: PoolMessage) -> Result<(), io::Error> {
+	    println!("RX-Pool:{:?}", msg);
+
 		let mut us = self.state.write().unwrap();
 		if us.stream.is_none() { return Ok(()); }
 
