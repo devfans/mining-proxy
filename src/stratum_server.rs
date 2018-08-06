@@ -171,11 +171,11 @@ fn job_to_json_string_prefix(template: &BlockTemplate, update_id: u32, user_coin
 	push_le_32_hex(update_id, &mut prefix); // 8 chars
 
 	prefix.push_str("\",\""); // 3 chars
-    println!("job_id:{}", job_id);
-    println!("coinbase_version: {}", template.coinbase_version);
-    println!("coinbase_prefix:{}", &utils::bytes_to_hex(&template.coinbase_prefix));
-    println!("update_id:{}", update_id);
-    println!("coinbase1: {}", prefix);
+    // println!("job_id:{}", job_id);
+    // println!("coinbase_version: {}", template.coinbase_version);
+    // println!("coinbase_prefix:{}", &utils::bytes_to_hex(&template.coinbase_prefix));
+    // println!("update_id:{}", update_id);
+    // println!("coinbase1: {}", prefix);
 	prefix
 }
 
@@ -216,8 +216,8 @@ fn job_to_json_string_postfix(template: &BlockTemplate, prev_changed: bool) -> S
 	} else {
 		postfix.push_str("false],\"id\":null,\"method\":\"mining.notify\"}");
 	}
-	println!("tpl coinbase_postfix:{:?}", &template.coinbase_postfix[..]);
-    println!("coinbase2: {}", postfix);
+	// println!("tpl coinbase_postfix:{:?}", &template.coinbase_postfix[..]);
+    // println!("coinbase2: {}", postfix);
 	postfix
 }
 
@@ -258,7 +258,7 @@ struct StratumClient {
 }
 impl StratumClient {
 	fn attempt_send(&self, item: String) -> bool {
-		println!("TX-Stratum:{}", item);
+		println!("TX-Stratum({}):{}", self.client_id, item);
 
 		if self.needs_close.load(Ordering::Acquire) {
 			return false;
