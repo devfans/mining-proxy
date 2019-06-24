@@ -11,7 +11,8 @@ use std::str;
 const REDIS_AUTHORIZED_USERS_KEY: &'static str = "BetterHash:AuthorizedUsers";
 
 pub struct RedisAuthenticatorSettings {
-	redis_url: Option<String>
+	redis_url: Option<String>,
+        key: Option<String>
 }
 
 pub struct RedisAuthenticatorState {
@@ -22,11 +23,13 @@ pub struct RedisAuthenticatorState {
 pub fn init_authenticator_settings() -> RedisAuthenticatorSettings {
 	RedisAuthenticatorSettings {
 		redis_url: None,
+                key: None,
 	}
 }
 
 pub fn print_authenticator_parameters() {
 	println!("--redis_url - Redis url: redis://host:port/");
+	println!("--redis_auth_key - Redis auth key(hashmap) name (Optional, default: {})", REDIS_AUTHORIZED_USERS_KEY);
 }
 
 /// Returns true if the given parameter could be parsed into a setting this Authenticator understands
@@ -42,6 +45,14 @@ pub fn parse_authenticator_parameter(settings: &mut RedisAuthenticatorSettings, 
 				panic!();
 			}
 			settings.redis_url = Some(redis_url.to_string());
+			true
+		}
+	} else if arg.starts_with("--redis_auth_key") {
+		if settings.key.is_some() {
+			println!("Cannot specify multiple redis_auth_key");
+			false
+		} else {
+			settings.key = Some(arg.split_at(17).1.to_string());
 			true
 		}
 	} else {
@@ -62,10 +73,16 @@ pub fn setup_authenticator(settings: RedisAuthenticatorSettings) -> RedisAuthent
 			panic!("Failed to connect to redis: {:?}", e);
 		},
 	};
+       
+        let auth_key = if let Some(key) = settings.key {
+                key
+	} else {
+		REDIS_AUTHORIZED_USERS_KEY.to_string()
+	};
 
 	RedisAuthenticatorState {
 		client: Mutex::new(client),
-		users_key: REDIS_AUTHORIZED_USERS_KEY.to_string(),
+		users_key: auth_key,
 	}
 }
 
@@ -76,10 +93,10 @@ pub fn check_user_auth(state: &RedisAuthenticatorState, user_id: &Vec<u8>, _user
 	if let Ok(user_id_str) = str::from_utf8(user_id) {
 		// Maybe convert to future for authentication process?
 		let mut client = state.client.lock().unwrap();
-		match client.sismember(&state.users_key, user_id_str) {
-			Ok(authorized) => {
-				println!("Authentication of user {} {}", user_id_str, if authorized { "succeeded" } else { "failed" });
-				authorized
+		match client.hget::<u32>(&state.users_key, user_id_str) {
+			Ok(id) => {
+				println!("Authentication of user {} {}", user_id_str, if id != 0 { "succeeded" } else { "failed" });
+				id != 0
 			},
 			Err(e) => {
 				println!("Failed to interact with redis: {:?}", e);

@@ -16,11 +16,11 @@ use tokio;
 use utils;
 
 // Kafka topics for shares and weak_blocks;
-const KAFKA_SHARES_TOPIC_POSTFIX: &'static str = "BetterHash-Shares-Topic";
+const KAFKA_SHARES_TOPIC: &'static str = "BetterHash-Shares-Topic";
 
 pub struct KafkaSubmitterSettings {
 	kafka_brokers: Option<String>,
-	kafka_topic_prefix: Option<String>,
+	kafka_topic: Option<String>,
 }
 pub struct KafkaSubmitterState {
 	topic: String,
@@ -30,13 +30,13 @@ pub struct KafkaSubmitterState {
 pub fn init_submitter_settings() -> KafkaSubmitterSettings {
 	KafkaSubmitterSettings {
 		kafka_brokers: None,
-		kafka_topic_prefix: None,
+		kafka_topic: None,
 	}
 }
 
 pub fn print_submitter_parameters() {
 	println!("--kafka_brokers - kafka brokers");
-	println!("--kafka_topic_prefix - kafka topic prefix for shares(Optional)");
+	println!("--kafka_topic - kafka topic for shares(Optional, default: {})", KAFKA_SHARES_TOPIC);
 }
 
 /// Returns true if the given parameter could be parsed into a setting this submitter understands
@@ -49,12 +49,12 @@ pub fn parse_submitter_parameter(settings: &mut KafkaSubmitterSettings, arg: &st
 			settings.kafka_brokers = Some(arg.split_at(16).1.to_string());
 			true
 		}
-	} else if arg.starts_with("--kafka_topic_prefix") {
-		if settings.kafka_topic_prefix.is_some() {
-			println!("Cannot specify multiple kafka_topic_prefix");
+	} else if arg.starts_with("--kafka_topic") {
+		if settings.kafka_topic.is_some() {
+			println!("Cannot specify multiple kafka_topic");
 			false
 		} else {
-			settings.kafka_topic_prefix = Some(arg.split_at(21).1.to_string());
+			settings.kafka_topic = Some(arg.split_at(21).1.to_string());
 			true
 		}
 	} else {
@@ -63,10 +63,10 @@ pub fn parse_submitter_parameter(settings: &mut KafkaSubmitterSettings, arg: &st
 }
 
 pub fn setup_submitter(settings: KafkaSubmitterSettings) -> KafkaSubmitterState {
-	let topic = if let Some(prefix) = settings.kafka_topic_prefix {
-		prefix + KAFKA_SHARES_TOPIC_POSTFIX
+	let topic = if let Some(topic_str) = settings.kafka_topic {
+                topic_str
 	} else {
-		KAFKA_SHARES_TOPIC_POSTFIX.to_string()
+		KAFKA_SHARES_TOPIC.to_string()
 	};
 
 	if settings.kafka_brokers.is_none() {
