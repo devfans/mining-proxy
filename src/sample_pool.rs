@@ -115,18 +115,20 @@ struct AllowedBlocksInfo {
 	/// hash -> chainwork
 	allowed_prev_blocks: HashMap<[u8; 32], [u8; 32]>,
 	best_chainwork: [u8; 32],
+        cur_height: i64,
 	cur_target: [u8; 32],
 	old_prev_blocks: HashSet<[u8; 32]>,
 	tentative_submitted_prev_blocks: HashSet<[u8; 32]>,
 	users_ref: Arc<Mutex<Vec<Weak<PerUserClientRef>>>>,
 }
+
 enum HeaderStatus {
 	TentativeAccept,
 	TentativeReject,
 	Absurd,
 }
 impl AllowedBlocksInfo {
-	fn update_chainwork(&mut self, chainwork: [u8; 32]) {
+	fn update_chainwork(&mut self, chainwork: [u8; 32], height: i64) {
 		println!("New best-seen-block, rejecting old blocks now!");
 		let old_prev_blocks = &mut self.old_prev_blocks;
 		let mut blocks_wiped = Vec::with_capacity(2);
@@ -138,6 +140,7 @@ impl AllowedBlocksInfo {
 			} else { true }
 		});
 		self.best_chainwork = chainwork;
+                self.cur_height = height;
 		let users_ref = self.users_ref.clone();
 		tokio::spawn(future::lazy(move || {
 			let users = users_ref.lock().unwrap().clone();
@@ -164,7 +167,8 @@ impl AllowedBlocksInfo {
 									println!("New header tied with current tip!");
 									self.allowed_prev_blocks.insert(hash, chainwork);
 								} else if confs >= 0 && equal_or_better {
-									self.update_chainwork(chainwork.clone());
+                                                                        let height = header.get("height").unwrap().as_i64().unwrap();
+									self.update_chainwork(chainwork.clone(), height);
 									self.allowed_prev_blocks.insert(hash, chainwork);
 								} else if equal_or_better {
 									println!("Got new header with more work, waiting on block validation to reject stale shares");
@@ -322,6 +326,7 @@ fn main() {
 	let block_info = Arc::new(RwLock::new(AllowedBlocksInfo {
 		allowed_prev_blocks: HashMap::new(),
 		best_chainwork: [0; 32],
+                cur_height: 0,
 		cur_target: [0xff; 32],
 		old_prev_blocks: HashSet::new(),
 		tentative_submitted_prev_blocks: HashSet::new(),
@@ -387,7 +392,8 @@ fn main() {
 										*best_block_hash_clone.lock().unwrap() = besthash_v.to_string();
 										let mut info_lock = block_info.write().unwrap();
 										info_lock.cur_target = targethash;
-										info_lock.update_chainwork(chainwork.clone());
+                                                                                let height = chain_info.get("headers").unwrap().as_i64().unwrap();
+										info_lock.update_chainwork(chainwork.clone(), height);
 										info_lock.allowed_prev_blocks.insert(besthash, chainwork);
 									}
 								}
@@ -526,9 +532,11 @@ fn main() {
 						}
 
 						macro_rules! check_prev_hash {
-							($msg: expr, $header_option: expr, $extra_fail_cmd: expr) => {
+							($msg: expr, $header_option: expr, $height: expr, $extra_fail_cmd: expr) => {
+                                                                let mut height;
 								let need_submit = {
 									let allowed_lock = block_info_clone.read().unwrap();
+                                                                        height = allowed_lock.cur_height;
 									if !allowed_lock.allowed_prev_blocks.contains_key(&$msg.header_prevblock) {
 										if !allowed_lock.tentative_submitted_prev_blocks.contains(&$msg.header_prevblock) {
 											if allowed_lock.old_prev_blocks.contains(&$msg.header_prevblock) {
@@ -547,10 +555,13 @@ fn main() {
 										} else { false }
 									} else { false }
 								};
+                                                                $height = height + 1;
 								if need_submit {
 									let header = $header_option.unwrap();
 									match AllowedBlocksInfo::submit_header(&block_info_clone, header, &rpc_client_clone) {
-										HeaderStatus::TentativeAccept => {},
+										HeaderStatus::TentativeAccept => {
+                                                                                    $height += 1;
+                                                                                },
 										HeaderStatus::TentativeReject => {
 											reject_share!($msg, ShareRejectedReason::StalePrevBlock);
 											$extra_fail_cmd;
@@ -768,7 +779,8 @@ fn main() {
 									return future::result(Err(io::Error::new(io::ErrorKind::InvalidData, utils::HandleError)));
 								}
 
-								check_prev_hash!(share, share.previous_header, {});
+                                                                let mut height;;
+								check_prev_hash!(share, share.previous_header, height, {});
 
 								let (our_payout, client_id) = check_coinbase_tx!(share.coinbase_tx, share, {});
 
@@ -803,7 +815,7 @@ fn main() {
 									println!("Got share that met weak block target, ignored as we'll check the weak block");
 								} else if leading_zeros >= client_target {
 									if client.submitted_header_hashes.try_insert(&share.header_prevblock, block_hash) {
-										share_submitted(&*submitter_state, client_id, &share.user_tag_1, our_payout, &block_header, leading_zeros, client_target);
+										share_submitted(&*submitter_state, client_id, &share.user_tag_1, our_payout, &block_header, leading_zeros, client_target, height);
 										share_received!(client, client_target, share);
 									} else {
 										reject_share!(share, ShareRejectedReason::Duplicate);
@@ -827,7 +839,8 @@ fn main() {
 								// transactions they included are going to be useless once they get
 								// the new block anyway.
 								let dummy_header: Option<BlockHeader> = None;
-								check_prev_hash!(sketch, dummy_header, send_response!(PoolMessage::WeakBlockStateReset {}));
+                                                                let mut height;
+								check_prev_hash!(sketch, dummy_header, height, send_response!(PoolMessage::WeakBlockStateReset {}));
 
 								let (coinbase_txid, (our_payout, client_id)) = match &sketch.txn[0] {
 									&WeakBlockAction::TakeTx { .. } => {
@@ -906,7 +919,7 @@ fn main() {
 								if leading_zeros >= client_target + WEAK_BLOCK_RATIO_0S {
 									if client.submitted_header_hashes.try_insert(&sketch.header_prevblock, block_hash) {
 										weak_block_submitted(&*submitter_state, client_id, &sketch.user_tag_1, our_payout, &header,
-											&new_txn, &sketch.extra_block_data, leading_zeros, client_target, &block_hash);
+											&new_txn, &sketch.extra_block_data, leading_zeros, client_target, &block_hash, height);
 										share_received!(client, client_target, sketch);
 									} else {
 										reject_share!(sketch, ShareRejectedReason::Duplicate);

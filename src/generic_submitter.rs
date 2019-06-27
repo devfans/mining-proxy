@@ -22,11 +22,11 @@ pub fn setup_submitter(_settings: GenericSubmitterSettings) -> GenericSubmitterS
 	GenericSubmitterState { }
 }
 
-pub fn share_submitted(_state: &GenericSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, _header: &BlockHeader, _leading_zeros: u8, _required_leading_zeros: u8) {
+pub fn share_submitted(_state: &GenericSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, _header: &BlockHeader, _leading_zeros: u8, _required_leading_zeros: u8, _heigt: i64) {
 	println!("Got valid share with value {} from \"{}\" from machine identified as \"{}\"", value, String::from_utf8_lossy(user_id), String::from_utf8_lossy(user_tag_1));
 }
 
 pub fn weak_block_submitted(_state: &GenericSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, _header: &BlockHeader, txn: &Vec<Vec<u8>>, _extra_block_data: &Vec<u8>,
-	_leading_zeros: u8, _required_leading_zeros: u8, _block_hash: &Sha256dHash) {
+	_leading_zeros: u8, _required_leading_zeros: u8, _block_hash: &Sha256dHash, _height: i64) {
 	println!("Got valid weak block with value {} from \"{}\" with {} txn from machine identified as \"{}\"", value, String::from_utf8_lossy(user_id), txn.len(), String::from_utf8_lossy(user_tag_1));
 }

@@ -54,7 +54,7 @@ pub fn parse_submitter_parameter(settings: &mut KafkaSubmitterSettings, arg: &st
 			println!("Cannot specify multiple kafka_topic");
 			false
 		} else {
-			settings.kafka_topic = Some(arg.split_at(21).1.to_string());
+			settings.kafka_topic = Some(arg.split_at(14).1.to_string());
 			true
 		}
 	} else {
@@ -93,6 +93,8 @@ pub fn setup_submitter(settings: KafkaSubmitterSettings) -> KafkaSubmitterState 
 struct ShareMessage {
 	user: String,       // miner username
 	worker: String,     // miner workername
+        height: i64,        // block height
+        prev_block_hash: String, // prev block hash
 	payout: u64,        // claimed value of the share - payout will be min(median share value, this value)
 	client_target: u8,  // client target
 	leading_zeros: u8,  // share target
@@ -108,6 +110,8 @@ struct ShareMessage {
 struct WeakBlockMessage {
 	user: String,       // miner username
 	worker: String,     // miner workername
+        height: i64,        // block height
+        prev_block_hash: String, // prev block hash
 	payout: u64,        // claimed value of the share - payout will be min(median share value, this value)
 	client_target: u8,  // client target
 	leading_zeros: u8,  // share target
@@ -119,7 +123,7 @@ struct WeakBlockMessage {
 	is_weak_block: bool,// weak block tag
 }
 
-pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, header: &BlockHeader, leading_zeros: u8, required_leading_zeros: u8) {
+pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, header: &BlockHeader, leading_zeros: u8, required_leading_zeros: u8, height: i64) {
 	println!("Got valid share with value {} from \"{}\" from machine identified as \"{}\"", value, String::from_utf8_lossy(user_id), String::from_utf8_lossy(user_tag_1));
 
 	tokio::spawn(state.kafka_producer.send(
@@ -134,6 +138,8 @@ pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_
 				version: header.version,
 				nbits: header.bits,
 				time: header.time,
+                                height,
+                                prev_block_hash: utils::bytes_to_hex(&header.prev_blockhash[..]),
 				is_good_block: false,
 				is_weak_block: false,
 			}).unwrap()),
@@ -148,7 +154,7 @@ pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_
 }
 
 pub fn weak_block_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, header: &BlockHeader, txn: &Vec<Vec<u8>>, _extra_block_data: &Vec<u8>,
-	leading_zeros: u8, required_leading_zeros: u8, block_hash: &Sha256dHash) {
+	leading_zeros: u8, required_leading_zeros: u8, block_hash: &Sha256dHash, height: i64) {
 	println!("Got valid weak block with value {} from \"{}\" with {} txn from machine identified as \"{}\"", value, String::from_utf8_lossy(user_id), txn.len(), String::from_utf8_lossy(user_tag_1));
 	let hash = &block_hash[..];
 	let (block_target, negative, overflow) = utils::nbits_to_target(header.bits);
@@ -169,6 +175,8 @@ pub fn weak_block_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user
 				version: header.version,
 				nbits: header.bits,
 				time: header.time,
+                                height,
+                                prev_block_hash: utils::bytes_to_hex(&header.prev_blockhash[..]),
 				hash: utils::bytes_to_hex(hash),
 				is_good_block,
 				is_weak_block: true,
