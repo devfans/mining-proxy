@@ -17,26 +17,31 @@ use utils;
 
 // Kafka topics for shares and weak_blocks;
 const KAFKA_SHARES_TOPIC: &'static str = "BetterHash-Shares-Topic";
+const KAFKA_EVENTS_TOPIC: &'static str = "BetterHash-Events-Topic";
 
 pub struct KafkaSubmitterSettings {
 	kafka_brokers: Option<String>,
-	kafka_topic: Option<String>,
+	kafka_share_topic: Option<String>,
+	kafka_event_topic: Option<String>,
 }
 pub struct KafkaSubmitterState {
-	topic: String,
+	share_topic: String,
+	event_topic: String,
 	kafka_producer: FutureProducer,
 }
 
 pub fn init_submitter_settings() -> KafkaSubmitterSettings {
 	KafkaSubmitterSettings {
 		kafka_brokers: None,
-		kafka_topic: None,
+		kafka_share_topic: None,
+		kafka_event_topic: None,
 	}
 }
 
 pub fn print_submitter_parameters() {
 	println!("--kafka_brokers - kafka brokers");
-	println!("--kafka_topic - kafka topic for shares(Optional, default: {})", KAFKA_SHARES_TOPIC);
+	println!("--kafka_share_topic - kafka topic for shares(Optional, default: {})", KAFKA_SHARES_TOPIC);
+	println!("--kafka_event_topic - kafka topic for events(Optional, default: {})", KAFKA_EVENTS_TOPIC);
 }
 
 /// Returns true if the given parameter could be parsed into a setting this submitter understands
@@ -49,12 +54,20 @@ pub fn parse_submitter_parameter(settings: &mut KafkaSubmitterSettings, arg: &st
 			settings.kafka_brokers = Some(arg.split_at(16).1.to_string());
 			true
 		}
-	} else if arg.starts_with("--kafka_topic") {
-		if settings.kafka_topic.is_some() {
+	} else if arg.starts_with("--kafka_share_topic") {
+		if settings.kafka_share_topic.is_some() {
 			println!("Cannot specify multiple kafka_topic");
 			false
 		} else {
-			settings.kafka_topic = Some(arg.split_at(14).1.to_string());
+			settings.kafka_share_topic = Some(arg.split_at(20).1.to_string());
+			true
+		}
+        } else if arg.starts_with("--kafka_event_topic") {
+		if settings.kafka_event_topic.is_some() {
+			println!("Cannot specify multiple kafka_topic");
+			false
+		} else {
+			settings.kafka_event_topic = Some(arg.split_at(20).1.to_string());
 			true
 		}
 	} else {
@@ -63,10 +76,16 @@ pub fn parse_submitter_parameter(settings: &mut KafkaSubmitterSettings, arg: &st
 }
 
 pub fn setup_submitter(settings: KafkaSubmitterSettings) -> KafkaSubmitterState {
-	let topic = if let Some(topic_str) = settings.kafka_topic {
-                topic_str
+	let share_topic = if let Some(share_topic_str) = settings.kafka_share_topic {
+                share_topic_str
 	} else {
 		KAFKA_SHARES_TOPIC.to_string()
+	};
+       
+        let event_topic = if let Some(event_topic_str) = settings.kafka_event_topic {
+                event_topic_str
+	} else {
+		KAFKA_EVENTS_TOPIC.to_string()
 	};
 
 	if settings.kafka_brokers.is_none() {
@@ -83,7 +102,8 @@ pub fn setup_submitter(settings: KafkaSubmitterSettings) -> KafkaSubmitterState 
 		.expect("Kafka Producer creation error");
 
 	KafkaSubmitterState {
-		topic,
+		share_topic,
+		event_topic,
 		kafka_producer,
 	}
 }
@@ -123,13 +143,26 @@ struct WeakBlockMessage {
 	is_weak_block: bool,// weak block tag
 }
 
+macro_rules! send_to_kafka {
+    ($state: expr, $message: expr, $topic: expr) => {
+        tokio::spawn($state.kafka_producer.send(
+		FutureRecord::to($topic)
+			.key("")
+			.payload($message),
+	0).then(|result| {
+		match result {
+			Ok(Ok(_)) => {},
+			Ok(Err((e, _))) => println!("Error: {:?}", e),
+			Err(_) => println!("Produce future cancelled"),
+		}
+		Ok(())
+	}));
+    }
+}
+
 pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, header: &BlockHeader, leading_zeros: u8, required_leading_zeros: u8, height: i64) {
 	println!("Got valid share with value {} from \"{}\" from machine identified as \"{}\"", value, String::from_utf8_lossy(user_id), String::from_utf8_lossy(user_tag_1));
-
-	tokio::spawn(state.kafka_producer.send(
-		FutureRecord::to(&state.topic)
-			.key("")
-			.payload(&serde_json::to_string(&ShareMessage {
+        send_to_kafka!(state, &serde_json::to_string(&ShareMessage {
 				user: String::from_utf8_lossy(&user_id).to_string(),
 				worker: String::from_utf8_lossy(&user_tag_1).to_string(),
 				payout: value,
@@ -142,15 +175,12 @@ pub fn share_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_
                                 prev_block_hash: utils::bytes_to_hex(&header.prev_blockhash[..]),
 				is_good_block: false,
 				is_weak_block: false,
-			}).unwrap()),
-	0).then(|result| {
-		match result {
-			Ok(Ok(_)) => {},
-			Ok(Err((e, _))) => println!("Error: {:?}", e),
-			Err(_) => println!("Produce future cancelled"),
-		}
-		Ok(())
-	}));
+			}).unwrap(), &state.share_topic);
+}
+
+pub fn event_submitted(state: &KafkaSubmitterState, event: &String) {
+        println!("Got event: {}", event);
+        send_to_kafka!(state, event, &state.event_topic);
 }
 
 pub fn weak_block_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user_tag_1: &Vec<u8>, value: u64, header: &BlockHeader, txn: &Vec<Vec<u8>>, _extra_block_data: &Vec<u8>,
@@ -163,10 +193,7 @@ pub fn weak_block_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user
 		return;
 	}
 	let is_good_block = utils::does_hash_meet_target(hash, &block_target[..]);
-	tokio::spawn(state.kafka_producer.send(
-		FutureRecord::to(&state.topic)
-			.key("")
-			.payload(&serde_json::to_string(&WeakBlockMessage {
+        send_to_kafka!(state, &serde_json::to_string(&WeakBlockMessage {
 				user: String::from_utf8_lossy(&user_id).to_string(),
 				worker: String::from_utf8_lossy(&user_tag_1).to_string(),
 				payout: value,
@@ -180,13 +207,6 @@ pub fn weak_block_submitted(state: &KafkaSubmitterState, user_id: &Vec<u8>, user
 				hash: utils::bytes_to_hex(hash),
 				is_good_block,
 				is_weak_block: true,
-			}).unwrap()),
-	0).then(|result| {
-		match result {
-			Ok(Ok(_)) => {},
-			Ok(Err((e, _))) => println!("Error: {:?}", e),
-			Err(_) => println!("Produce future cancelled"),
-		}
-		Ok(())
-	}));
+			}).unwrap(), &state.share_topic);
 }
+

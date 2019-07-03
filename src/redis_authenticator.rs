@@ -89,7 +89,8 @@ pub fn setup_authenticator(settings: RedisAuthenticatorSettings) -> RedisAuthent
 /// Returns true if the given user_id/auth pair is valid for this pool. Note that the pool_proxy
 /// stuff doesn't really bother with auth, so if you use it you probably can't reliably check
 /// user_auth, but there probably isnt any reason to ever anyway...
-pub fn check_user_auth(state: &RedisAuthenticatorState, user_id: &Vec<u8>, _user_auth: &Vec<u8>) -> bool {
+pub fn check_user_auth(state: &RedisAuthenticatorState, user_id: &Vec<u8>, user_auth: &Vec<u8>) -> bool {
+	println!("User {} authenticating with pass {}", String::from_utf8_lossy(user_id), String::from_utf8_lossy(user_auth));
 	if let Ok(user_id_str) = str::from_utf8(user_id) {
 		// Maybe convert to future for authentication process?
 		let mut client = state.client.lock().unwrap();
