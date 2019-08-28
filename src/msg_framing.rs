@@ -277,7 +277,7 @@ impl WorkMsgFramer {
 }
 
 #[derive(Debug)]
-struct CodecError;
+pub struct CodecError;
 impl fmt::Display for CodecError {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		fmt.write_str("Bad data")

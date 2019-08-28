@@ -22,11 +22,11 @@ path = "src/tool.rs"
 [profile.release]
 panic = "abort"
 [profile.dev]
-panic = "abort"
 
 [features]
 kafka_submitter = [ "rdkafka", "serde", "serde_derive" ]
 redis_authenticator = [ "simple_redis" ]
+relay_submitter = [ "serde", "serde_derive", "rand" ]
 
 [dependencies]
 secp256k1 = "0.11"
@@ -45,3 +45,4 @@ serde = { version = "1.0.70", optional = true }
 serde_derive = { version = "1.0", optional = true }
 rdkafka = { version = "0.17.0", optional = true }
 simple_redis = { version = "0.3.43", optional = true }
+rand = { version = "0.3", optional = true }

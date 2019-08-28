@@ -12,6 +12,8 @@ extern crate tokio_io;
 extern crate tokio_codec;
 extern crate secp256k1;
 extern crate serde_json;
+#[cfg(feature = "relay_submitter")]
+extern crate rand;
 
 mod msg_framing;
 use msg_framing::*;
@@ -56,11 +58,11 @@ use std::time::{SystemTime, UNIX_EPOCH, Duration, Instant};
 use std::collections::{hash_map, HashMap, HashSet};
 
 
-#[cfg(feature = "kafka_submitter")]
+#[cfg(any(feature = "kafka_submitter", feature = "relay_submitter"))]
 extern crate serde;
 #[cfg(feature = "kafka_submitter")]
 extern crate rdkafka;
-#[cfg(feature = "kafka_submitter")]
+#[cfg(any(feature = "kafka_submitter", feature = "relay_submitter"))]
 #[macro_use]
 extern crate serde_derive;
 
@@ -70,6 +72,16 @@ mod kafka_submitter;
 #[cfg(feature = "kafka_submitter")]
 use kafka_submitter::*;
 
+// Relay submitter
+#[cfg(feature = "relay_submitter")]
+mod relay_submitter;
+#[cfg(feature = "relay_submitter")]
+use relay_submitter::*;
+#[cfg(feature = "relay_submitter")]
+mod relay_msg_framing;
+#[cfg(feature = "relay_submitter")]
+mod connection_maintainer;
+
 // Redis authenticator
 #[cfg(feature = "redis_authenticator")]
 mod redis_authenticator;
@@ -77,9 +89,9 @@ mod redis_authenticator;
 use redis_authenticator::*;
 
 // Generic submitter and authenticator
-#[cfg(not(feature = "kafka_submitter"))]
+#[cfg(all(not(feature = "kafka_submitter"), not(feature = "relay_submitter")))]
 mod generic_submitter;
-#[cfg(not(feature = "kafka_submitter"))]
+#[cfg(all(not(feature = "kafka_submitter"), not(feature = "relay_submitter")))]
 use generic_submitter::*;
 
 #[cfg(not(feature = "redis_authenticator"))]
@@ -314,7 +326,6 @@ fn main() {
 		}
 	}
 
-	let submitter_state = Arc::new(setup_submitter(submitter_settings));
 	let authenticator_state = Arc::new(setup_authenticator(authenticator_settings));
 
 	if listen_bind.is_none() || auth_key.is_none() || payout_addr.is_none() || rpc_path.is_none() {
@@ -379,6 +390,7 @@ fn main() {
 	let rpc_client_clone = rpc_client.clone();
 	let best_block_hash = Arc::new(Mutex::new(String::new()));
 	rt.spawn(timer::Interval::new(Instant::now() + Duration::from_secs(1), Duration::from_millis(50)).for_each(move |_| {
+
 		let best_block_hash_clone = best_block_hash.clone();
 		let block_info = block_info_clone.clone();
 		rpc_client_clone.make_rpc_call("getblockchaininfo", &Vec::new()).and_then(move |chain_info| {
@@ -413,6 +425,7 @@ fn main() {
 	}));
 
 	rt.spawn(futures::lazy(move || -> Result<(), ()> {
+	        let submitter_state = Arc::new(setup_submitter(submitter_settings));
 		match net::TcpListener::bind(&listen_bind.unwrap()) {
 			Ok(listener) => {
 				let mut max_client_id = 0;
