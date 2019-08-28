@@ -175,6 +175,15 @@ pub fn slice_to_le32(v: &[u8]) -> u32 {
 	((v[0] as u32) << 8*0)
 }
 
+#[allow(dead_code)]
+#[inline]
+pub fn slice_to_be32(v: &[u8]) -> u32 {
+	((v[0] as u32) << 8*3) |
+	((v[1] as u32) << 8*2) |
+	((v[2] as u32) << 8*1) |
+	((v[3] as u32) << 8*0)
+}
+
 #[inline]
 pub fn slice_to_le64(v: &[u8]) -> u64 {
 	((v[7] as u64) << 8*7) |

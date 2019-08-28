@@ -42,21 +42,23 @@ impl codec::Encoder for RelayMsgFramer {
         match msg {
             RelayMessage::ShareMessage { ref data } => {
                 res.reserve(10 + data.len());
-                res.put_u16_le(self.flag_data);
-                res.put_u32_le(10 + data.len() as u32);
+                res.put_u16_be(self.flag_data);
+                res.put_u32_be(10 + data.len() as u32);
                 let mut rng = rand::thread_rng();
-                res.put_u32_le(rng.gen::<u32>());
+                res.put_u32_be(rng.gen::<u32>());
                 res.put_slice(data.as_bytes());
             },
             RelayMessage::AuthMessage { ref password } => {
                 res.reserve(10 + password.len());
-                res.put_u16_le(self.flag_auth);
-                res.put_u32_le(10 + password.len() as u32);
+                res.put_u16_be(self.flag_auth);
+                res.put_u32_be(10 + password.len() as u32);
                 let mut rng = rand::thread_rng();
-                res.put_u32_le(rng.gen::<u32>());
+                res.put_u32_be(rng.gen::<u32>());
                 res.put_slice(password.as_bytes());
             },
         }
+        println!("Sent {:?}", msg);
+        println!("Sent {:?}", res);
         Ok(())
     }
 }
@@ -67,12 +69,12 @@ impl codec::Decoder for RelayMsgFramer {
 
     fn decode(&mut self, bytes: &mut bytes::BytesMut) -> Result<Option<RelayMessage>, io::Error> {
         if bytes.len() < 10 { return Ok(None) }
-        let len = utils::slice_to_le32(&bytes[2..6]) as usize;
+        let len = utils::slice_to_be32(&bytes[2..6]) as usize;
         if bytes.len() < len { return Ok(None) }
 
         let flag = (bytes[0] as u16) << 8 | bytes[1] as u16;
         match flag {
-            0xfe01 => {
+            0xef01 => {
                 let password = match String::from_utf8(bytes[10..len].to_vec()) {
                     Ok(string) => string,
                     Err(_) => {
@@ -85,7 +87,7 @@ impl codec::Decoder for RelayMsgFramer {
                 bytes.advance(len);
                 Ok(Some(msg))
             },
-            0xef01 => {
+            0xfe01 => {
                 let share = match String::from_utf8(bytes[10..len].to_vec()) {
                     Ok(string) => string,
                     Err(_) => {
